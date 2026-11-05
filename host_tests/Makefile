@@ -11,13 +11,17 @@ SRCS = \
 
 .PHONY: all test clean
 
-all: test_core
+all: test_core test_font
 
 test_core: test_core.c $(SRCS)
 	$(CC) $(CFLAGS) -o $@ test_core.c $(SRCS) $(LDFLAGS)
 
-test: test_core
+test_font: test_font.c ../shell/src/font/font.c
+	$(CC) $(CFLAGS) -o $@ test_font.c ../shell/src/font/font.c $(LDFLAGS)
+
+test: test_core test_font
 	./test_core
+	./test_font
 
 clean:
-	rm -f test_core
+	rm -f test_core test_font

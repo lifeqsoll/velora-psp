@@ -8,6 +8,8 @@ extern "C" {
 #endif
 
 const unsigned char *shell_font_glyph(unsigned cp);
+int shell_font_advance(void);
+int shell_font_measure(const char *utf8);
 
 int shell_font_utf8_draw(const char *utf8, int x, int y, ShellRgb c,
                          void (*plot)(int px, int py, ShellRgb col, void *ud), void *ud);

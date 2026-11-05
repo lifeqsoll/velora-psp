@@ -1,10 +1,12 @@
 #include "shell/theme.h"
 #include "shell/path.h"
+#include "shell/files.h"
 
 #include <stdio.h>
 #include <string.h>
 
 #define THEME_PATH_DEFAULT "ms0:/PSP/SYSTEM/ownshell/theme.cfg"
+#define THEME_DIR_DEFAULT "ms0:/PSP/SYSTEM/ownshell"
 
 int shell_theme_save(const ShellTheme *t, const char *path)
 {
@@ -14,6 +16,9 @@ int shell_theme_save(const ShellTheme *t, const char *path)
         return -1;
     if (!path)
         path = THEME_PATH_DEFAULT;
+#ifndef HOST_TEST
+    (void)shell_files_ensure_dir(THEME_DIR_DEFAULT);
+#endif
     if (shell_path_sanitize(path, clean, sizeof(clean)) != SHELL_PATH_OK)
         return -1;
     f = fopen(clean, "wb");

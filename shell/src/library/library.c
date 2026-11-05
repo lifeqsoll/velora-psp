@@ -22,9 +22,16 @@ void shell_library_free(ShellLibrary *lib)
 int shell_library_add(ShellLibrary *lib, const char *title, const char *path, ShellEntryKind kind)
 {
     ShellLibEntry *nitems;
-    size_t ncap;
+    size_t ncap, i;
     if (!lib || !title || !path)
         return -1;
+    /* Dedupe by basename-ish title or full path */
+    for (i = 0; i < lib->count; ++i) {
+        if (strcmp(lib->items[i].path, path) == 0)
+            return 0;
+        if (strcmp(lib->items[i].title, title) == 0 && lib->items[i].kind == kind)
+            return 0;
+    }
     if (lib->count >= lib->capacity) {
         ncap = lib->capacity ? lib->capacity * 2 : 32;
         nitems = (ShellLibEntry *)realloc(lib->items, ncap * sizeof(ShellLibEntry));
@@ -70,16 +77,22 @@ void shell_library_filter(const ShellLibrary *src, const char *query, ShellLibra
     shell_library_free(dst);
     shell_library_init(dst);
     if (!query || !query[0]) {
-        for (i = 0; i < src->count; ++i)
+        for (i = 0; i < src->count; ++i) {
             shell_library_add(dst, src->items[i].title, src->items[i].path, src->items[i].kind);
+            if (dst->count > 0)
+                dst->items[dst->count - 1].favorite = src->items[i].favorite;
+        }
         dst->focus = src->focus < dst->count ? src->focus : 0;
         return;
     }
     str_tolower_copy(q, sizeof(q), query);
     for (i = 0; i < src->count; ++i) {
         str_tolower_copy(t, sizeof(t), src->items[i].title);
-        if (strstr(t, q))
+        if (strstr(t, q)) {
             shell_library_add(dst, src->items[i].title, src->items[i].path, src->items[i].kind);
+            if (dst->count > 0)
+                dst->items[dst->count - 1].favorite = src->items[i].favorite;
+        }
     }
 }
 
@@ -110,4 +123,30 @@ int shell_library_is_iso_name(const char *name)
 int shell_library_is_eboot_name(const char *name)
 {
     return ends_with_ci(name, "eboot.pbp");
+}
+
+int shell_library_is_music_name(const char *name)
+{
+    return ends_with_ci(name, ".mp3") || ends_with_ci(name, ".aa3") || ends_with_ci(name, ".oma") ||
+           ends_with_ci(name, ".wav");
+}
+
+int shell_library_toggle_favorite(ShellLibrary *lib, size_t index)
+{
+    if (!lib || index >= lib->count)
+        return 0;
+    lib->items[index].favorite = !lib->items[index].favorite;
+    return lib->items[index].favorite;
+}
+
+int shell_library_find_path(const ShellLibrary *lib, const char *path)
+{
+    size_t i;
+    if (!lib || !path)
+        return -1;
+    for (i = 0; i < lib->count; ++i) {
+        if (strcmp(lib->items[i].path, path) == 0)
+            return (int)i;
+    }
+    return -1;
 }

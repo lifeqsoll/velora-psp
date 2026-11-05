@@ -18,6 +18,7 @@ typedef struct {
     char title[96];
     char path[512];
     ShellEntryKind kind;
+    int favorite;
 } ShellLibEntry;
 
 typedef struct {
@@ -25,26 +26,22 @@ typedef struct {
     size_t count;
     size_t capacity;
     size_t focus;
-    size_t scan_cursor; /* incremental */
+    size_t scan_cursor;
 } ShellLibrary;
 
 void shell_library_init(ShellLibrary *lib);
 void shell_library_free(ShellLibrary *lib);
-
-/* Append if capacity allows; returns 0 on success. */
 int shell_library_add(ShellLibrary *lib, const char *title, const char *path, ShellEntryKind kind);
-
 void shell_library_focus_move(ShellLibrary *lib, int delta);
-
-/* Case-insensitive substring filter into dst (dst pre-inited). */
 void shell_library_filter(const ShellLibrary *src, const char *query, ShellLibrary *dst);
-
-/* Recognise common game file extensions. */
 int shell_library_is_iso_name(const char *name);
 int shell_library_is_eboot_name(const char *name);
+int shell_library_is_music_name(const char *name);
+int shell_library_toggle_favorite(ShellLibrary *lib, size_t index);
+int shell_library_find_path(const ShellLibrary *lib, const char *path);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* SHELL_LIBRARY_H */
+#endif

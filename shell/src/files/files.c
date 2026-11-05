@@ -102,3 +102,20 @@ ShellFileStatus shell_files_copy_safe(const char *src, const char *dst_dir, cons
         *cancelled = 0;
     return copy_fn(src_clean, dst_clean, cancelled, userdata);
 }
+
+void shell_files_format_size(uint64_t bytes, char *buf, size_t buf_sz)
+{
+    if (!buf || buf_sz < 8)
+        return;
+    if (bytes < 1024ull) {
+        snprintf(buf, buf_sz, "%u B", (unsigned)bytes);
+    } else if (bytes < 1024ull * 1024ull) {
+        snprintf(buf, buf_sz, "%u KB", (unsigned)(bytes / 1024ull));
+    } else if (bytes < 1024ull * 1024ull * 1024ull) {
+        unsigned mb = (unsigned)(bytes / (1024ull * 1024ull));
+        unsigned frac = (unsigned)((bytes % (1024ull * 1024ull)) * 10ull / (1024ull * 1024ull));
+        snprintf(buf, buf_sz, "%u.%u MB", mb, frac);
+    } else {
+        snprintf(buf, buf_sz, "%u GB", (unsigned)(bytes / (1024ull * 1024ull * 1024ull)));
+    }
+}

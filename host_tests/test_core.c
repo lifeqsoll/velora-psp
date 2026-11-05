@@ -61,6 +61,15 @@ static void test_input(void)
     CHECK(in.pressed == 0, "held not pressed again");
     CHECK(shell_input_stick_active(0.1f, 0.1f, 0.25f) == 0, "stick inactive");
     CHECK(shell_input_stick_active(0.5f, 0.0f, 0.25f) == 1, "stick active");
+    /* autorepeat: hold UP */
+    shell_input_set_repeat(3, 2);
+    memset(&in, 0, sizeof(in));
+    shell_input_begin_frame(&in, SHELL_BTN_UP, 0, 0);
+    CHECK(in.repeat & SHELL_BTN_UP, "first press repeats");
+    shell_input_begin_frame(&in, SHELL_BTN_UP, 0, 0);
+    shell_input_begin_frame(&in, SHELL_BTN_UP, 0, 0);
+    shell_input_begin_frame(&in, SHELL_BTN_UP, 0, 0);
+    CHECK(in.repeat & SHELL_BTN_UP, "after delay repeats");
 }
 
 static void test_library(void)
@@ -77,6 +86,12 @@ static void test_library(void)
     CHECK(lib.focus == 1, "focus move");
     shell_library_filter(&lib, "beta", &filtered);
     CHECK(filtered.count == 1, "filter beta");
+    shell_library_add(&lib, "Alpha", "ms0:/PSP/ISO/a.iso", SHELL_ENTRY_GAME_ISO);
+    CHECK(lib.count == 3, "dedupe same title");
+    shell_library_add(&lib, "Alpha", "ms0:/ISO/a.iso", SHELL_ENTRY_GAME_ISO);
+    CHECK(lib.count == 3, "dedupe same path");
+    CHECK(shell_library_toggle_favorite(&lib, 0) == 1, "favorite on");
+    CHECK(lib.items[0].favorite == 1, "favorite flag");
     shell_library_free(&lib);
     shell_library_free(&filtered);
 }

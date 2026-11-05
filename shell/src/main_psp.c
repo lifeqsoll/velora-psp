@@ -9,11 +9,11 @@
 
 #include <pspctrl.h>
 #include <pspdisplay.h>
-#include <pspge.h>
 #include <pspgu.h>
 #include <pspkernel.h>
 
 #include <dirent.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -33,12 +33,13 @@ static void *zbp;
 static int running = 1;
 static int gu_started;
 
-static void *get_vram(unsigned int size)
+/* sceGuDrawBuffer/DispBuffer/DepthBuffer take VRAM *offsets*, not absolute pointers. */
+static void *get_vram_offset(unsigned int size)
 {
     static unsigned int staticOffset = 0;
     unsigned int result = staticOffset;
-    staticOffset += (size + 63) & ~63u;
-    return (void *)(((unsigned char *)sceGeEdramGetAddr()) + result);
+    staticOffset += (size + 63u) & ~63u;
+    return (void *)(uintptr_t)result;
 }
 
 int exit_callback(int arg1, int arg2, void *common)
@@ -70,9 +71,9 @@ static void setup_callbacks(void)
 
 static void gu_init(void)
 {
-    fbp0 = get_vram(BUF_WIDTH * SCR_HEIGHT * 4);
-    fbp1 = get_vram(BUF_WIDTH * SCR_HEIGHT * 4);
-    zbp = get_vram(BUF_WIDTH * SCR_HEIGHT * 2);
+    fbp0 = get_vram_offset(BUF_WIDTH * SCR_HEIGHT * 4);
+    fbp1 = get_vram_offset(BUF_WIDTH * SCR_HEIGHT * 4);
+    zbp = get_vram_offset(BUF_WIDTH * SCR_HEIGHT * 2);
 
     sceGuInit();
     sceGuStart(GU_DIRECT, gulist);

@@ -6,6 +6,7 @@
 #include "shell/library.h"
 #include "shell/path.h"
 #include "shell/font.h"
+#include "shell/prefs.h"
 
 #include <pspctrl.h>
 #include <pspdisplay.h>
@@ -207,6 +208,9 @@ static void scan_game_folder(ShellLibrary *lib, const char *dir, ShellEntryKind 
     while ((e = readdir(d)) != NULL) {
         if (e->d_name[0] == '.')
             continue;
+        /* Do not list our own shell as a generic app entry */
+        if (strcmp(e->d_name, "OWNSHELL") == 0 || strcmp(e->d_name, "OwnShell") == 0)
+            continue;
         if (shell_path_join(clean, e->d_name, full, sizeof(full)) != SHELL_PATH_OK)
             continue;
         if (stat(full, &st) != 0 || !S_ISDIR(st.st_mode))
@@ -257,10 +261,7 @@ static void seed_library(ShellApp *app)
     scan_dir_music(&app->music, "ms0:/PSP/MUSIC");
     scan_dir_music(&app->music, "ms0:/PSP/MUSIC/MP3");
     scan_dir_music(&app->music, "ef0:/MUSIC");
-    /* Keep first-frame status as control hints; counts are in library meta (n/m). */
-    (void)app->games.count;
-    (void)app->music.count;
-    (void)app->apps.count;
+    (void)shell_prefs_load_library(&app->games, &app->apps, app->recent_paths, &app->recent_count, 8);
     snprintf(app->status, sizeof(app->status),
              "L/R вкладки  крест фокус  X запуск  Select фильтр  Start настройки");
 }

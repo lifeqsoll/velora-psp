@@ -1,6 +1,7 @@
 #include "shell/ui.h"
 #include "shell/font.h"
 #include "shell/path.h"
+#include "shell/prefs.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -129,6 +130,7 @@ static void push_recent(ShellApp *app, const char *path)
         strncpy(app->recent_paths[0], path, sizeof(app->recent_paths[0]) - 1);
         app->recent_paths[0][sizeof(app->recent_paths[0]) - 1] = '\0';
     }
+    (void)shell_prefs_save_library(&app->games, &app->apps, app->recent_paths, app->recent_count);
 }
 
 void shell_app_init(ShellApp *app)
@@ -219,8 +221,8 @@ static void apply_preset(ShellApp *app, int idx)
 
 static void handle_settings(ShellApp *app, const ShellInput *in)
 {
-    /* 0..4 presets, 5 +, 6 view, 7 HOME preview */
-    int max_f = SHELL_THEME_PRESET_COUNT + 2;
+    /* 0..4 presets, 5 +, 6 view, 7 wallpaper, 8 HOME preview */
+    int max_f = SHELL_THEME_PRESET_COUNT + 3;
     if (in->pressed & SHELL_BTN_CIRCLE) {
         app->tab = app->tab_before_settings;
         if (app->tab >= SHELL_TAB_SETTINGS)
@@ -240,6 +242,11 @@ static void handle_settings(ShellApp *app, const ShellInput *in)
             app->theme.library_view = (app->theme.library_view + 1) % 3;
             (void)shell_theme_save(&app->theme, NULL);
             snprintf(app->status, sizeof(app->status), "Вид: %s", VIEW_RU[app->theme.library_view]);
+        } else if (app->settings_focus == SHELL_THEME_PRESET_COUNT + 2) {
+            app->theme.wallpaper_id = (app->theme.wallpaper_id + 1) % 3;
+            (void)shell_theme_save(&app->theme, NULL);
+            snprintf(app->status, sizeof(app->status), "Обои: пресет %d (файлы обоев — след. этап)",
+                     app->theme.wallpaper_id);
         }
     }
     if (in->pressed & SHELL_BTN_CROSS) {
@@ -253,6 +260,11 @@ static void handle_settings(ShellApp *app, const ShellInput *in)
             app->theme.library_view = (app->theme.library_view + 1) % 3;
             (void)shell_theme_save(&app->theme, NULL);
             snprintf(app->status, sizeof(app->status), "Вид: %s", VIEW_RU[app->theme.library_view]);
+        } else if (app->settings_focus == SHELL_THEME_PRESET_COUNT + 2) {
+            app->theme.wallpaper_id = (app->theme.wallpaper_id + 1) % 3;
+            (void)shell_theme_save(&app->theme, NULL);
+            snprintf(app->status, sizeof(app->status), "Обои: пресет %d (файлы обоев — след. этап)",
+                     app->theme.wallpaper_id);
         } else {
             app->tab = SHELL_TAB_HOME_PREVIEW;
             snprintf(app->status, sizeof(app->status), "Предпросмотр HOME (не плагин)");
@@ -543,6 +555,8 @@ static void handle_library(ShellApp *app, const ShellInput *in)
         if (idx >= 0) {
             int on = shell_library_toggle_favorite(src, (size_t)idx);
             lib->items[lib->focus].favorite = on;
+            (void)shell_prefs_save_library(&app->games, &app->apps, app->recent_paths,
+                                           app->recent_count);
             snprintf(app->status, sizeof(app->status), on ? "В избранном" : "Убрано из избранного");
         }
         return;
@@ -1022,14 +1036,21 @@ void shell_app_render(ShellApp *app)
             char vline[64];
             ShellRgb c = focused ? app->theme.accent : app->theme.text;
             snprintf(vline, sizeof(vline), "Вид библиотеки: %s", VIEW_RU[app->theme.library_view]);
-            shell_platform_text(20, 130, vline, c);
+            shell_platform_text(20, 128, vline, c);
         }
         {
             int focused = (app->settings_focus == SHELL_THEME_PRESET_COUNT + 2);
+            char wline[64];
             ShellRgb c = focused ? app->theme.accent : app->theme.text;
-            shell_platform_text(20, 152, "Предпросмотр HOME-панели", c);
+            snprintf(wline, sizeof(wline), "Обои: пресет %d", app->theme.wallpaper_id);
+            shell_platform_text(20, 146, wline, c);
         }
-        shell_platform_text(20, 180, "Акцент только для фокуса и ползунков", app->theme.text);
+        {
+            int focused = (app->settings_focus == SHELL_THEME_PRESET_COUNT + 3);
+            ShellRgb c = focused ? app->theme.accent : app->theme.text;
+            shell_platform_text(20, 164, "Предпросмотр HOME-панели", c);
+        }
+        shell_platform_text(20, 190, "Акцент только для фокуса и ползунков", app->theme.text);
         draw_hints(app, app->status[0] ? app->status : "O назад  X выбрать");
         shell_platform_swap();
         return;
@@ -1064,9 +1085,26 @@ void shell_app_render(ShellApp *app)
 
         if (fb->count && fb->focus < fb->count) {
             ellipsize(fullname, sizeof(fullname), fb->items[fb->focus].name, 400);
-            shell_platform_text(20, 222, fullname, app->theme.text);
+            shell_platform_text(20, 218, fullname, app->theme.text);
         } else if (fb->count == 0) {
             shell_platform_text(20, 120, "Папка пуста или недоступна", app->theme.text);
+        }
+        {
+            ShellRgb muted = {150, 154, 160};
+            uint64_t free_b = 0;
+            char free_line[64];
+#ifndef HOST_TEST
+            if (shell_files_free_space(fb->cwd, &free_b) == 0) {
+                char sz[24];
+                shell_files_format_size(free_b, sz, sizeof(sz));
+                snprintf(free_line, sizeof(free_line), "Свободно: %s", sz);
+            } else
+#endif
+            {
+                snprintf(free_line, sizeof(free_line), "Свободно: неизвестно");
+            }
+            shell_platform_text(280, 38, free_line, muted);
+            (void)free_b;
         }
         draw_hints(app, "X открыть  O вверх  Triangle меню  L/R локация");
         shell_platform_swap();

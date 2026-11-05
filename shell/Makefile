@@ -10,6 +10,7 @@ OBJS = \
 	src/library/library.o \
 	src/files/files.o \
 	src/files/files_psp.o \
+	src/prefs/prefs.o \
 	src/path/path.o \
 	src/font/font.o
 

@@ -1,0 +1,16 @@
+*.o
+*.elf
+*.prx
+*.pbp
+*.PBP
+!shell/EBOOT.PBP
+*.SFO
+PARAM.SFO
+shell/OwnShell*
+host_tests/test_core
+.DS_Store
+tmp/
+dist/
+.env
+.env.*
+tools/ppsspp/

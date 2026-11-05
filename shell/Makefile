@@ -3,6 +3,7 @@ VERSION = 0.1.0-m1
 
 OBJS = \
 	src/main_psp.o \
+	src/gfx/platform_fb.o \
 	src/ui/ui.o \
 	src/theme/theme.o \
 	src/theme/theme_persist.o \
@@ -12,16 +13,17 @@ OBJS = \
 	src/files/files_psp.o \
 	src/prefs/prefs.o \
 	src/path/path.o \
-	src/font/font.o
+	src/font/font_ft.o \
+	src/font/font_ttf_data.o
 
 # Directories only — build.mak adds -I prefixes. Do NOT put -I$(INCDIR) in CFLAGS.
-INCDIR = include
+INCDIR = include $(shell psp-config --psp-prefix)/include/freetype2
 CFLAGS = -O2 -G0 -Wall -Wextra
 CXXFLAGS = $(CFLAGS) -fno-exceptions -fno-rtti
 ASFLAGS = $(CFLAGS)
 
 LIBDIR =
-LIBS = -lpspgum -lpspgu -lm -lpsppower -lpsprtc
+LIBS = -lpspgum -lpspgu -lfreetype -lpng -lbz2 -lz -lm -lpsppower -lpsprtc
 LDFLAGS =
 
 EXTRA_TARGETS = EBOOT.PBP

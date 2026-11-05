@@ -8,6 +8,9 @@
 PARAM.SFO
 shell/OwnShell*
 host_tests/test_core
+host_tests/test_font
+host_tests/test_roundrect
+host_tests/dump_glyphs
 .DS_Store
 tmp/
 dist/

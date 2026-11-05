@@ -45,7 +45,7 @@ Shared pure logic lives under `shell/src/{theme,path,input,library,files}` with 
 | `files` | Dual-pane-capable browser; sanitize paths; confirm destructive ops |
 | `input` | Button/analog mapping; stick deadzone; edge-triggered nav |
 | `path` | Flash-partition deny; traversal block; ms0/ef0 roots only |
-| `font` | Built-in 8×8 Latin + Cyrillic bitmap (no reliance on system RU) |
+| `font` | Embedded Noto Sans subset + FreeType (AA Latin/Cyrillic); soft-FB blend |
 
 ### Tabs
 
@@ -112,7 +112,7 @@ Never claim real-hardware validation without running the checklist on device.
 
 ## Memory budget (guidance)
 
-PSP-3000 userland is tight. M1 targets: avoid loading all covers at once; incremental scan; bitmap font over FreeType for first bootable build; keep EBOOT + heap well under available user partition (measure with `.map` when toolchain available).
+PSP-3000 userland is tight. M1 targets: avoid loading all covers at once; incremental scan; FreeType glyph cache (embedded TTF subset); keep EBOOT + heap under available user partition (measure with `.map` when toolchain available).
 
 ## Non-goals (explicit)
 

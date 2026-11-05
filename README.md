@@ -1,5 +1,7 @@
 # Velora / OwnShell — native PSP-3008 shell (ARK)
 
+> **В разработке (WIP).** Функциональный каркас оболочки есть; **визуал ещё не доведён** до уровня нормальных CTF/лаунчер-тем (пиксельность soft-FB). План доработки UI: [docs/ui-polish-plan.md](docs/ui-polish-plan.md). Не считать релизным / «готовым видом».
+
 Нативная оболочка **480×272** для PSP-3008 под **ARK/PRO**. Самостоятельный `EBOOT.PBP` (не React, не браузерный мок).
 
 ## Что есть в оболочке
@@ -37,6 +39,7 @@ Autotest (опционально): файл `ms0:/PSP/SYSTEM/ownshell/autotest.c
 ## Документация
 
 - [docs/architecture.md](docs/architecture.md)
+- [docs/ui-polish-plan.md](docs/ui-polish-plan.md) — WIP план визуала
 - [docs/compatibility-matrix.md](docs/compatibility-matrix.md)
 - [docs/pinned-versions.md](docs/pinned-versions.md)
 - [docs/hardware-checklist.md](docs/hardware-checklist.md)

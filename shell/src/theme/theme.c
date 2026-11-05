@@ -6,12 +6,13 @@
 #define M_PI 3.14159265358979323846
 #endif
 
+/* Match concept: deep navy + electric cyan */
 static const ShellThemePreset PRESETS[SHELL_THEME_PRESET_COUNT] = {
-    {"Циан", {0, 200, 220}},
-    {"Янтарь", {230, 160, 40}},
-    {"Мята", {80, 200, 140}},
-    {"Роза", {220, 100, 140}},
-    {"Белый", {220, 220, 230}},
+    {"Циан", {0, 229, 255}},
+    {"Фиолет", {160, 100, 255}},
+    {"Песок", {210, 170, 120}},
+    {"Мята", {80, 210, 160}},
+    {"Серый", {180, 190, 200}},
 };
 
 const ShellThemePreset *shell_theme_presets(void)
@@ -22,9 +23,9 @@ const ShellThemePreset *shell_theme_presets(void)
 void shell_theme_default(ShellTheme *t)
 {
     t->accent = PRESETS[0].accent;
-    t->bg = (ShellRgb){28, 30, 34};
-    t->text = (ShellRgb){230, 232, 236};
-    t->focus_text = (ShellRgb){16, 18, 22};
+    t->bg = (ShellRgb){10, 15, 20};      /* #0A0F14 */
+    t->text = (ShellRgb){235, 240, 245};
+    t->focus_text = (ShellRgb){8, 12, 16};
     t->library_view = 0;
     t->wallpaper_id = 0;
 }

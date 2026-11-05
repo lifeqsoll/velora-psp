@@ -23,7 +23,13 @@ OwnShell M1 source in this repository is original unless noted below.
 
 ## Fonts
 
-8×8 ASCII table in `shell/src/font/font.c` is an original compact bitmap set for M1.  
-Cyrillic glyphs are original hand-packed bitmaps for UI strings.
+| Asset | Source | License | Notes |
+|-------|--------|---------|-------|
+| `shell/assets/fonts/ShellUI-Regular.ttf` | Subset of [Noto Sans](https://fonts.google.com/noto/specimen/Noto+Sans) Regular | SIL OFL 1.1 — `shell/assets/fonts/OFL.txt` | Latin + Cyrillic + punctuation; embedded as `shell/src/font/font_ttf_data.c` |
+| FreeType | pspdev `libfreetype` | FTL / GPLv2 | Runtime rasterizer (Cyrillic UI text) |
+| ya2d | xerpi / pspdev `libya2d` | LGPL-2.1 | GU 2D (clear/swap/textures) |
+| libpspvram / vramalloc | pspdev | see pspdev | VRAM helpers required by ya2d |
+
+Legacy `shell/src/font/font.c` 8×8 bitmaps are unused by the PSP EBOOT (kept only if referenced by old host dumps).
 
 When any external code is vendored later, add: name, version/commit, license text path, and files touched.

@@ -17,28 +17,22 @@ static int fails;
 
 int main(void)
 {
-    const unsigned char *g;
     const char *path = "ms0:/ISO";
     const char *mixed = "Нет записей — скан ms0:/ISO";
     int w;
 
-    g = shell_font_glyph((unsigned)'m');
-    CHECK(g[0] != 0 || g[1] != 0 || g[2] != 0, "latin m has ink");
-    g = shell_font_glyph((unsigned)'0');
-    CHECK(g != NULL, "digit 0 glyph");
-    g = shell_font_glyph((unsigned)'/');
-    CHECK(g != NULL, "slash glyph");
-    g = shell_font_glyph(0x2014);
-    CHECK(g[3] == 0xFF, "em-dash row");
-    g = shell_font_glyph(0x0418); /* И */
-    CHECK(g != NULL, "Cyrillic I");
+    CHECK(shell_font_init() == 0, "font init");
+    CHECK(shell_font_advance() > 0, "advance > 0");
+    CHECK(shell_font_line_height() >= 12, "line height sane");
 
     w = shell_font_measure(path);
-    CHECK(w == (int)strlen(path) * shell_font_advance(), "path measure = 8*len");
+    CHECK(w > 0, "path measure > 0");
+    CHECK(w >= shell_font_measure("ms0"), "path wider than prefix");
     w = shell_font_measure(mixed);
     CHECK(w > shell_font_measure("Нет"), "mixed string wider");
-    CHECK(shell_font_glyph(0x1F600) == shell_font_glyph((unsigned)'?'), "unknown -> ?");
+    CHECK(shell_font_measure("????") > 0, "unknown glyphs still advance");
 
+    shell_font_shutdown();
     if (fails)
         return 1;
     printf("all font tests passed\n");

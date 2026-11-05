@@ -700,20 +700,35 @@ void shell_app_update(ShellApp *app, const ShellInput *in)
     else
         handle_library(app, in);
 }
+/* —— Visual layer: match concept composition for 480×272 —— */
 
-static void draw_hints(ShellApp *app, const char *line)
+static ShellRgb COL_PANEL(void) { return (ShellRgb){22, 28, 36}; }
+static ShellRgb COL_CARD(void) { return (ShellRgb){28, 34, 44}; }
+static ShellRgb COL_MUTED(void) { return (ShellRgb){140, 150, 165}; }
+static ShellRgb COL_LINE(void) { return (ShellRgb){40, 50, 65}; }
+
+static void draw_border(int x, int y, int w, int h, ShellRgb c, int t)
 {
-    ShellRgb bar = {30, 32, 36};
-    char clipped[120];
-    shell_platform_rect(6, 250, 468, 18, bar, 0);
-    ellipsize(clipped, sizeof(clipped), line, 450);
-    shell_platform_text(12, 254, clipped, app->theme.text);
+    if (t < 1)
+        t = 1;
+    shell_platform_rect(x, y, w, t, c, 0);
+    shell_platform_rect(x, y + h - t, w, t, c, 0);
+    shell_platform_rect(x, y, t, h, c, 0);
+    shell_platform_rect(x + w - t, y, t, h, c, 0);
+}
+
+static void draw_frame_fill(int x, int y, int w, int h, ShellRgb fill, ShellRgb border, int radius,
+                            int border_t)
+{
+    shell_platform_rect(x, y, w, h, border, radius);
+    if (w > border_t * 2 && h > border_t * 2)
+        shell_platform_rect(x + border_t, y + border_t, w - border_t * 2, h - border_t * 2, fill,
+                            radius > border_t ? radius - border_t : 0);
 }
 
 static void draw_gear(int x, int y, ShellRgb c)
 {
-    /* Compact gear: ring + teeth, no glow */
-    ShellRgb hole = {36, 38, 42};
+    ShellRgb hole = COL_PANEL();
     shell_platform_rect(x + 2, y, 4, 2, c, 0);
     shell_platform_rect(x + 2, y + 6, 4, 2, c, 0);
     shell_platform_rect(x, y + 2, 2, 4, c, 0);
@@ -722,237 +737,357 @@ static void draw_gear(int x, int y, ShellRgb c)
     shell_platform_rect(x + 3, y + 3, 2, 2, hole, 0);
 }
 
+static void draw_wifi_icon(int x, int y, ShellRgb c, int on)
+{
+    ShellRgb dim = COL_MUTED();
+    ShellRgb use = on ? c : dim;
+    shell_platform_rect(x + 3, y + 5, 2, 2, use, 0);
+    shell_platform_rect(x + 1, y + 3, 6, 1, use, 0);
+    shell_platform_rect(x, y + 1, 8, 1, use, 0);
+}
+
+static void draw_batt_icon(int x, int y, ShellRgb c, int pct)
+{
+    ShellRgb dim = COL_MUTED();
+    int fill;
+    shell_platform_rect(x, y + 1, 12, 7, dim, 1);
+    shell_platform_rect(x + 12, y + 3, 2, 3, dim, 0);
+    if (pct < 0)
+        pct = 0;
+    if (pct > 100)
+        pct = 100;
+    fill = (pct * 10) / 100;
+    if (fill > 0)
+        shell_platform_rect(x + 1, y + 2, fill, 5, c, 0);
+}
+
+static void draw_hints(ShellApp *app, const char *line)
+{
+    ShellRgb bar = {14, 18, 24};
+    ShellRgb muted = COL_MUTED();
+    int y = 252;
+    int x = 12;
+    int gap = 16;
+    int w_key, w_lbl;
+    (void)line;
+    shell_platform_rect(0, 246, 480, 26, bar, 0);
+    shell_platform_rect(0, 245, 480, 1, COL_LINE(), 0);
+
+    w_key = shell_font_measure("X");
+    shell_platform_text(x, y, "X", app->theme.accent);
+    x += w_key + 4;
+    w_lbl = shell_font_measure("Выбрать");
+    shell_platform_text(x, y, "Выбрать", app->theme.text);
+    x += w_lbl + gap;
+
+    w_key = shell_font_measure("O");
+    shell_platform_text(x, y, "O", app->theme.accent);
+    x += w_key + 4;
+    w_lbl = shell_font_measure("Назад");
+    shell_platform_text(x, y, "Назад", app->theme.text);
+    x += w_lbl + gap;
+
+    w_key = shell_font_measure("L/R");
+    shell_platform_text(x, y, "L/R", app->theme.accent);
+    x += w_key + 4;
+    w_lbl = shell_font_measure("Разделы");
+    shell_platform_text(x, y, "Разделы", app->theme.text);
+    x += w_lbl + gap;
+
+    if (app->status[0] && x < 460) {
+        char clipped[64];
+        int room = 470 - x;
+        if (room > 24) {
+            ellipsize(clipped, sizeof(clipped), app->status, room);
+            shell_platform_text(x, y, clipped, muted);
+        }
+    }
+}
+
 static void draw_chrome(ShellApp *app)
 {
     int i, x;
-    ShellRgb panel = {36, 38, 42};
-    ShellRgb muted = {160, 164, 170};
-    char clock[24], batt[24], sys[64];
+    ShellRgb muted = COL_MUTED();
+    char clock[24], batt[24];
+    int batt_pct = -1;
+    int right_edge = 360; /* tabs must stay left of status cluster */
+    int tab_y = 10;
+    int lh = shell_font_line_height();
 
-    /* Wallpaper presets are flat tint shifts only — no fake photo loading. */
-    {
-        ShellRgb bg = app->theme.bg;
-        if (app->theme.wallpaper_id == 1) {
-            bg.r = 24;
-            bg.g = 28;
-            bg.b = 36;
-        } else if (app->theme.wallpaper_id == 2) {
-            bg.r = 32;
-            bg.g = 28;
-            bg.b = 28;
-        }
-        shell_platform_clear(bg.r, bg.g, bg.b);
-    }
-    shell_platform_rect(4, 4, 472, 264, panel, 10);
+    shell_platform_clear(app->theme.bg.r, app->theme.bg.g, app->theme.bg.b);
+    shell_platform_rect(0, 0, 480, 34, COL_PANEL(), 0);
 
-    x = 12;
+    x = 14;
     for (i = 0; i < TAB_MAIN_COUNT; ++i) {
         int active = (app->tab == (ShellTab)i);
         ShellRgb c = active ? app->theme.accent : app->theme.text;
         int tw = shell_font_measure(TAB_RU[i]);
-        shell_platform_text(x, 10, TAB_RU[i], c);
+        if (x + tw > right_edge)
+            break;
+        shell_platform_text(x, tab_y, TAB_RU[i], c);
         if (active)
-            shell_platform_rect(x, 22, tw, 2, app->theme.accent, 0);
-        x += tw + 14;
-    }
-
-    {
-        int active = (app->tab == SHELL_TAB_SETTINGS || app->tab == SHELL_TAB_HOME_PREVIEW);
-        ShellRgb c = active ? app->theme.accent : muted;
-        draw_gear(456, 10, c);
-        if (active)
-            shell_platform_rect(456, 22, 8, 2, app->theme.accent, 0);
+            shell_platform_rect(x, 28, tw, 2, app->theme.accent, 1);
+        x += tw + 16;
     }
 
     clock[0] = batt[0] = '\0';
     shell_platform_clock(clock, sizeof(clock));
     shell_platform_battery(batt, sizeof(batt));
-    sys[0] = '\0';
-    if (clock[0] && batt[0])
-        snprintf(sys, sizeof(sys), "%s %s", clock, batt);
-    else if (clock[0])
-        snprintf(sys, sizeof(sys), "%s", clock);
-    else if (batt[0])
-        snprintf(sys, sizeof(sys), "%s", batt);
-    if (sys[0])
-        shell_platform_text(360, 10, sys, muted);
+    if (batt[0])
+        sscanf(batt, "%d", &batt_pct);
 
-    shell_platform_rect(12, 28, 456, 1, app->theme.accent, 0);
+    /* Right cluster: clock → batt → wifi → gear (right-aligned) */
+    {
+        int rx = 468;
+        int active = (app->tab == SHELL_TAB_SETTINGS || app->tab == SHELL_TAB_HOME_PREVIEW);
+        int cw;
+        draw_gear(rx - 10, 12, active ? app->theme.accent : muted);
+        rx -= 18;
+        draw_wifi_icon(rx - 10, 12, app->theme.accent, 0);
+        rx -= 16;
+        draw_batt_icon(rx - 14, 12, app->theme.accent, batt_pct >= 0 ? batt_pct : 0);
+        rx -= 18;
+        if (clock[0]) {
+            cw = shell_font_measure(clock);
+            shell_platform_text(rx - cw, tab_y, clock, muted);
+        }
+        (void)lh;
+    }
+
+    shell_platform_rect(0, 33, 480, 1, COL_LINE(), 0);
+}
+
+static void draw_play_icon(int x, int y, ShellRgb c)
+{
+    shell_platform_rect(x, y, 2, 8, c, 0);
+    shell_platform_rect(x + 2, y + 1, 2, 6, c, 0);
+    shell_platform_rect(x + 4, y + 2, 2, 4, c, 0);
+    shell_platform_rect(x + 6, y + 3, 2, 2, c, 0);
 }
 
 static void draw_cover_row(ShellApp *app, ShellLibrary *lib)
 {
-    ShellRgb card = {48, 52, 58};
-    ShellRgb slot = {62, 66, 72};
-    ShellRgb wash = {42, 48, 54};
+    ShellRgb card = COL_CARD();
+    ShellRgb slot = {36, 44, 56};
+    ShellRgb muted = COL_MUTED();
     size_t i, start = 0;
-    int cover_w = 86;
-    int cover_h = 110;
-    int gap = 10;
-    int row_w, base_x, visible;
+    int cover_w = 64;
+    int cover_h = 90; /* ~2:3; leave room for FT text + pill + footer */
+    int gap = 12;
+    int visible, row_w, base_x;
     char title[96];
-    ShellRgb muted = {150, 154, 160};
+    const char *filter_lbl = NULL;
 
     if (lib->count == 0)
         return;
 
-    /* soft wash behind covers — muted, not glass */
-    shell_platform_rect(12, 34, 456, 150, wash, 8);
-
-    visible = (int)lib->count < 4 ? (int)lib->count : 4;
-    if (lib->focus >= 2 && lib->count > 4)
-        start = lib->focus - 1;
+    visible = (int)lib->count < 5 ? (int)lib->count : 5;
+    if (lib->focus >= 2 && lib->count > 5)
+        start = lib->focus - 2;
     if (start + (size_t)visible > lib->count && lib->count >= (size_t)visible)
         start = lib->count - (size_t)visible;
 
     row_w = visible * cover_w + (visible - 1) * gap;
-    base_x = 12 + (456 - row_w) / 2;
+    base_x = (480 - row_w) / 2;
     if (base_x < 16)
         base_x = 16;
 
     for (i = start; i < lib->count && (int)(i - start) < visible; ++i) {
         int idx = (int)(i - start);
         int focused = (i == lib->focus);
-        int cw = focused ? cover_w + 12 : cover_w;
-        int ch = focused ? cover_h + 12 : cover_h;
-        int cx = base_x + idx * (cover_w + gap) - (focused ? 6 : 0);
-        int cy = focused ? 42 : 48;
-        ShellRgb border = focused ? app->theme.accent : card;
-        const char *t = lib->items[i].title;
-        shell_platform_rect(cx - 3, cy - 3, cw + 6, ch + 6, border, focused ? 10 : 8);
-        shell_platform_rect(cx, cy, cw, ch, slot, focused ? 8 : 6);
-        {
-            char short_t[24];
-            ellipsize(short_t, sizeof(short_t), t, cw - 12);
-            shell_platform_text(cx + 6, cy + ch / 2 - 4, short_t, app->theme.text);
-        }
+        int cw = focused ? cover_w + 14 : cover_w;
+        int ch = focused ? cover_h + 14 : cover_h;
+        int cx = base_x + idx * (cover_w + gap) - (focused ? 7 : 0);
+        int cy = focused ? 40 : 46;
+        char short_t[20];
+        ShellRgb border = focused ? app->theme.accent : COL_LINE();
+        int bt = focused ? 2 : 1;
+
+        draw_frame_fill(cx, cy, cw, ch, slot, border, focused ? 12 : 10, bt);
+        /* fake cover art blocks — proportion kept, no stretch */
+        shell_platform_rect(cx + 8, cy + 10, cw - 16, ch / 3, card, 6);
+        ellipsize(short_t, sizeof(short_t), lib->items[i].title, cw - 14);
+        shell_platform_text(cx + 6, cy + ch - 20, short_t, app->theme.text);
         if (lib->items[i].favorite)
-            shell_platform_rect(cx + 6, cy + 6, 6, 6, app->theme.accent, 2);
+            shell_platform_rect(cx + cw - 14, cy + 8, 8, 8, app->theme.accent, 4);
     }
 
-    if (lib->focus < lib->count) {
-        const char *action = (lib->items[lib->focus].kind == SHELL_ENTRY_MUSIC) ? "Выбрать" : "Запустить";
-        int aw;
-        ellipsize(title, sizeof(title), lib->items[lib->focus].title, 360);
-        shell_platform_text(20, 196, title, app->theme.text);
-        aw = shell_font_measure(action) + 16;
-        shell_platform_rect(18, 214, aw, 20, app->theme.accent, 5);
-        shell_platform_text(26, 218, action, app->theme.focus_text);
-        {
-            char meta[48];
-            snprintf(meta, sizeof(meta), "%u / %u", (unsigned)(lib->focus + 1), (unsigned)lib->count);
-            shell_platform_text(18 + aw + 10, 218, meta, muted);
-        }
+    if (lib->focus >= lib->count)
+        return;
+
+    ellipsize(title, sizeof(title), lib->items[lib->focus].title, 300);
+    shell_platform_text(24, 150, title, app->theme.text);
+    if (app->show_favorites_only == 2)
+        filter_lbl = "Недавние";
+    else if (app->show_favorites_only == 1)
+        filter_lbl = "Избранное";
+    else
+        filter_lbl = "Библиотека";
+    shell_platform_text(24, 150 + shell_font_line_height() + 2, filter_lbl, muted);
+
+    /* Pill Launch — solid cyan capsule, dark label (concept) */
+    {
+        int bw = 168;
+        int bx = (480 - bw) / 2;
+        int by = 198;
+        ShellRgb on_pill = {10, 15, 20};
+        int tx;
+        shell_platform_rect(bx, by, bw, 28, app->theme.accent, 14);
+        draw_play_icon(bx + 18, by + 10, on_pill);
+        tx = bx + 36;
+        shell_platform_text(tx, by + (28 - shell_font_line_height()) / 2 + 1, "Запустить", on_pill);
     }
 }
 
 static void draw_grid(ShellApp *app, ShellLibrary *lib)
 {
-    ShellRgb card = {48, 52, 58};
-    ShellRgb slot = {58, 62, 68};
-    size_t i;
-    int cols = 4, cell_w = 100, cell_h = 48, gap = 6;
-    size_t start = 0;
+    ShellRgb card = COL_CARD();
+    size_t i, start = 0;
+    int cols = 4, cell_w = 104, cell_h = 52, gap = 8;
     char title[48];
 
     if (lib->count == 0)
         return;
     if (lib->focus >= 8)
-        start = (lib->focus / (size_t)cols - 1) * (size_t)cols;
+        start = (lib->focus / (size_t)cols) * (size_t)cols;
+    if (start > 0 && lib->focus < start)
+        start = 0;
 
     for (i = start; i < lib->count && i < start + 8; ++i) {
         int local = (int)(i - start);
         int col = local % cols;
         int row = local / cols;
-        int x = 18 + col * (cell_w + gap);
+        int x = 16 + col * (cell_w + gap);
         int y = 40 + row * (cell_h + gap);
         int focused = (i == lib->focus);
-        ShellRgb b = focused ? app->theme.accent : card;
-        shell_platform_rect(x - 1, y - 1, cell_w + 2, cell_h + 2, b, 5);
-        shell_platform_rect(x, y, cell_w, cell_h, slot, 4);
+        ShellRgb border = focused ? app->theme.accent : COL_LINE();
+        draw_frame_fill(x, y, cell_w, cell_h, card, border, 10, focused ? 2 : 1);
         ellipsize(title, sizeof(title), lib->items[i].title, cell_w - 12);
-        shell_platform_text(x + 6, y + 18, title, focused ? app->theme.focus_text : app->theme.text);
+        shell_platform_text(x + 8, y + 18, title, app->theme.text);
     }
 }
 
 static void draw_list(ShellApp *app, ShellLibrary *lib)
 {
-    ShellRgb card = {48, 52, 58};
+    ShellRgb card = COL_CARD();
     size_t i, start;
     int row = 0;
     char line[120];
 
     if (lib->count == 0)
         return;
-    start = lib->focus > 4 ? lib->focus - 4 : 0;
-    for (i = start; i < lib->count && row < 7; ++i, ++row) {
+    start = lib->focus > 5 ? lib->focus - 5 : 0;
+    for (i = start; i < lib->count && row < 8; ++i, ++row) {
         int focused = (i == lib->focus);
-        ShellRgb bgc = focused ? app->theme.accent : card;
-        ShellRgb tc = focused ? app->theme.focus_text : app->theme.text;
-        ellipsize(line, sizeof(line), lib->items[i].title, 380);
-        shell_platform_rect(16, 38 + row * 26, 448, 24, bgc, 5);
-        shell_platform_text(22, 44 + row * 26, line, tc);
+        ShellRgb border = focused ? app->theme.accent : COL_LINE();
+        draw_frame_fill(14, 40 + row * 28, 452, 26, card, border, 8, focused ? 2 : 1);
+        ellipsize(line, sizeof(line), lib->items[i].title, 400);
+        shell_platform_text(24, 46 + row * 28, line, app->theme.text);
         if (lib->items[i].favorite)
-            shell_platform_text(440, 44 + row * 26, "*", app->theme.accent);
+            shell_platform_rect(446, 48 + row * 28, 8, 8, app->theme.accent, 4);
     }
 }
 
 static void draw_empty_library(ShellApp *app)
 {
+    ShellRgb muted = COL_MUTED();
+    draw_frame_fill(40, 70, 400, 120, COL_CARD(), COL_LINE(), 14, 1);
     if (app->tab == SHELL_TAB_GAMES) {
-        shell_platform_text(20, 80, "Библиотека пуста", app->theme.text);
-        shell_platform_text(20, 100, "Проверено:", app->theme.text);
-        shell_platform_text(20, 118, "ms0:/ISO  ms0:/PSP/ISO", app->theme.accent);
-        shell_platform_text(20, 136, "ef0:/ISO  ef0:/PSP/ISO", app->theme.accent);
-        shell_platform_text(20, 160, "Положите ISO/CSO в одну из папок", app->theme.text);
+        shell_platform_text(60, 90, "Библиотека пуста", app->theme.text);
+        shell_platform_text(60, 112, "ms0:/ISO   ms0:/PSP/ISO", app->theme.accent);
+        shell_platform_text(60, 130, "ef0:/ISO   ef0:/PSP/ISO", muted);
+        shell_platform_text(60, 152, "Положите ISO/CSO в одну из папок", muted);
     } else if (app->tab == SHELL_TAB_APPS) {
-        shell_platform_text(20, 80, "Нет приложений", app->theme.text);
-        shell_platform_text(20, 100, "Проверено: ms0:/PSP/GAME", app->theme.accent);
-        shell_platform_text(20, 120, "Папка с EBOOT.PBP", app->theme.text);
+        shell_platform_text(60, 100, "Нет приложений", app->theme.text);
+        shell_platform_text(60, 122, "ms0:/PSP/GAME  — папка с EBOOT.PBP", app->theme.accent);
     } else {
-        shell_platform_text(20, 80, "Нет локальной музыки", app->theme.text);
-        shell_platform_text(20, 100, "Проверено: ms0:/MUSIC  ms0:/PSP/MUSIC", app->theme.accent);
-        shell_platform_text(20, 120, "Форматы: MP3, AA3, WAV", app->theme.text);
-        shell_platform_text(20, 144, "Воспроизведение — отдельный этап", app->theme.text);
+        shell_platform_text(60, 90, "Нет локальной музыки", app->theme.text);
+        shell_platform_text(60, 112, "ms0:/MUSIC  ms0:/PSP/MUSIC", app->theme.accent);
+        shell_platform_text(60, 134, "Плеер — отдельный этап", muted);
     }
+}
+
+static void draw_hslider(int x, int y, int w, int fill_pct, ShellRgb accent, ShellRgb track)
+{
+    int fw;
+    if (fill_pct < 0)
+        fill_pct = 0;
+    if (fill_pct > 100)
+        fill_pct = 100;
+    shell_platform_rect(x, y + 5, w, 6, track, 3);
+    fw = (w * fill_pct) / 100;
+    if (fw > 0)
+        shell_platform_rect(x, y + 5, fw, 6, accent, 3);
+    shell_platform_rect(x + fw - 5, y + 2, 10, 12, accent, 5);
 }
 
 static void draw_home_preview(ShellApp *app)
 {
-    ShellRgb dim = {20, 22, 26};
-    ShellRgb card = {48, 52, 58};
-    ShellRgb muted = {160, 164, 170};
+    ShellRgb card = COL_CARD();
+    ShellRgb muted = COL_MUTED();
+    ShellRgb track = {40, 50, 65};
+    char batt[24];
+    int i;
+    const char *acts[] = {"Сохранить", "Загрузить", "Скриншот", "Выйти"};
 
-    shell_platform_rect(10, 36, 460, 208, dim, 10);
-    shell_platform_text(18, 44, "ПРЕДПРОСМОТР HOME — не внутриигровой модуль", app->theme.accent);
+    shell_platform_text(14, 36, "Быстрое меню", app->theme.text);
+    batt[0] = '\0';
+    shell_platform_battery(batt, sizeof(batt));
+    if (batt[0])
+        shell_platform_text(400, 36, batt, muted);
+    else
+        shell_platform_text(380, 36, "--%", muted);
 
-    shell_platform_rect(18, 64, 200, 100, card, 8);
-    shell_platform_text(26, 72, "Музыка", app->theme.text);
-    shell_platform_text(26, 90, "— нет трека —", muted);
-    shell_platform_text(26, 108, "<<  |>  >>", app->theme.accent);
-    shell_platform_rect(26, 130, 160, 6, muted, 2);
-    shell_platform_rect(26, 130, 40, 6, app->theme.accent, 2);
+    /* Music card */
+    draw_frame_fill(12, 54, 250, 88, card, COL_LINE(), 12, 1);
+    shell_platform_rect(22, 64, 48, 48, (ShellRgb){45, 55, 70}, 10);
+    shell_platform_text(80, 66, "Нет трека", app->theme.text);
+    shell_platform_text(80, 84, "Плейлист: —", muted);
+    draw_hslider(80, 102, 160, 0, app->theme.accent, track);
+    shell_platform_text(80, 122, "<<   |>   >>", app->theme.accent);
+    shell_platform_text(200, 122, "Музыка", muted);
 
-    shell_platform_rect(230, 64, 100, 100, card, 8);
-    shell_platform_text(238, 72, "Яркость", app->theme.text);
-    shell_platform_rect(246, 100, 10, 50, muted, 2);
-    shell_platform_rect(246, 120, 10, 30, app->theme.accent, 2);
+    /* Sliders */
+    draw_frame_fill(272, 54, 196, 88, card, COL_LINE(), 12, 1);
+    shell_platform_text(284, 64, "Яркость", muted);
+    draw_hslider(284, 78, 170, 70, app->theme.accent, track);
+    shell_platform_text(284, 100, "Громкость", muted);
+    draw_hslider(284, 114, 170, 55, app->theme.accent, track);
 
-    shell_platform_rect(340, 64, 100, 100, card, 8);
-    shell_platform_text(348, 72, "Громкость", app->theme.text);
-    shell_platform_rect(354, 100, 10, 50, muted, 2);
-    shell_platform_rect(354, 110, 10, 40, app->theme.accent, 2);
+    /* Action tiles 4 */
+    for (i = 0; i < 4; ++i) {
+        int x = 12 + i * 116;
+        int focused = (i == 0); /* preview only — first highlighted as concept */
+        ShellRgb border = focused ? app->theme.accent : COL_LINE();
+        draw_frame_fill(x, 152, 108, 40, card, border, 12, focused ? 2 : 1);
+        shell_platform_text(x + 12, 164, acts[i], app->theme.text);
+    }
+    shell_platform_text(12, 202, "* savestate не реализован", muted);
+    draw_gear(12, 218, muted);
+    shell_platform_text(24, 218, "Доп. инструменты (PRX позже)", muted);
+}
 
-    shell_platform_rect(18, 174, 442, 28, card, 6);
-    shell_platform_text(26, 182, "Сохранить*  Загрузить*  Скрин  Выход", app->theme.text);
-    shell_platform_text(18, 208, "* savestate не реализован (не подмена сейвов)", muted);
-    shell_platform_text(18, 222, "Гик-меню (CPU/кнопки): только в будущем PRX", muted);
+static void draw_mini_library_preview(ShellApp *app, int x, int y)
+{
+    ShellRgb card = COL_CARD();
+    int k;
+    draw_frame_fill(x, y, 160, 100, card, app->theme.accent, 12, 1);
+    for (k = 0; k < 3; ++k) {
+        int cx = x + 12 + k * 48;
+        int focused = (k == 1);
+        int cw = focused ? 40 : 32;
+        int ch = focused ? 56 : 48;
+        int cy = y + (focused ? 16 : 22);
+        draw_frame_fill(cx, cy, cw, ch, (ShellRgb){40, 50, 62},
+                        focused ? app->theme.accent : COL_LINE(), 8, focused ? 2 : 1);
+    }
+    shell_platform_text(x + 36, y + 82, "Превью", COL_MUTED());
 }
 
 void shell_app_render(ShellApp *app)
 {
     ShellLibrary *lib;
-    ShellRgb card = {48, 52, 58};
+    ShellRgb card = COL_CARD();
     int i;
     if (!app)
         return;
@@ -961,111 +1096,125 @@ void shell_app_render(ShellApp *app)
 
     if (app->mode == SHELL_MODE_COLOR_PICK) {
         int k;
-        shell_platform_text(20, 40, "Круговая палитра", app->theme.text);
-        /* Hue ring samples — stick picks continuously, ring is guide */
+        shell_platform_text(16, 40, "Палитра акцента", app->theme.text);
         for (k = 0; k < 12; ++k) {
             float ang = (float)k / 12.f;
             ShellRgb sw = shell_theme_from_hsv(ang, 0.9f, app->picker_brightness);
-            int rx = 220 + (int)(48.f * cosf(ang * 6.2831853f));
-            int ry = 120 + (int)(36.f * sinf(ang * 6.2831853f));
-            shell_platform_rect(rx, ry, 14, 14, sw, 4);
+            int rx = 220 + (int)(52.f * cosf(ang * 6.2831853f));
+            int ry = 120 + (int)(40.f * sinf(ang * 6.2831853f));
+            shell_platform_rect(rx, ry, 16, 16, sw, 8);
         }
-        shell_platform_rect(206, 106, 40, 40, app->theme.accent, 20);
-        shell_platform_text(20, 180, "Стик — цвет, вверх/вниз — яркость", app->theme.text);
-        shell_platform_text(20, 198, "X применить   O отмена", app->theme.text);
+        shell_platform_rect(204, 104, 44, 44, app->theme.accent, 22);
+        draw_border(202, 102, 48, 48, app->theme.text, 1);
+        shell_platform_text(16, 190, "Стик — цвет   вверх/вниз — яркость", COL_MUTED());
         draw_hints(app, app->status);
         shell_platform_swap();
         return;
     }
 
     if (app->mode == SHELL_MODE_CONFIRM) {
-        shell_platform_rect(40, 80, 400, 100, card, 10);
-        shell_platform_text(56, 100, app->status, app->theme.text);
-        shell_platform_text(56, 140, "X — да    O — нет", app->theme.accent);
+        draw_frame_fill(50, 80, 380, 100, card, app->theme.accent, 14, 2);
+        shell_platform_text(70, 110, app->status, app->theme.text);
+        shell_platform_text(70, 140, "X — да     O — нет", app->theme.accent);
         draw_hints(app, "Подтверждение");
         shell_platform_swap();
         return;
     }
 
     if (app->mode == SHELL_MODE_CONTEXT) {
-        shell_platform_rect(130, 48, 220, 28 + CTX_COUNT * 24, card, 10);
+        draw_frame_fill(130, 48, 220, 32 + CTX_COUNT * 26, card, app->theme.accent, 14, 2);
         shell_platform_text(146, 58, "Меню файла", app->theme.text);
         for (i = 0; i < CTX_COUNT; ++i) {
-            ShellRgb c = (app->settings_focus == i) ? app->theme.accent : app->theme.text;
             if (app->settings_focus == i)
-                shell_platform_rect(142, 80 + i * 24, 196, 20, app->theme.accent, 4);
-            shell_platform_text(150, 84 + i * 24, CTX_RU[i],
-                                app->settings_focus == i ? app->theme.focus_text : c);
+                shell_platform_rect(142, 80 + i * 26, 196, 22, app->theme.accent, 8);
+            shell_platform_text(152, 84 + i * 26, CTX_RU[i],
+                                app->settings_focus == i ? app->theme.focus_text : app->theme.text);
         }
-        draw_hints(app, "X выбрать  O назад");
+        draw_hints(app, "");
         shell_platform_swap();
         return;
     }
 
     if (app->mode == SHELL_MODE_SEARCH) {
-        shell_platform_text(20, 48, app->rename_pending ? "Переименование" : "Поиск", app->theme.text);
-        shell_platform_text(20, 70, app->status, app->theme.accent);
+        shell_platform_text(16, 40, app->rename_pending ? "Переименование" : "Поиск", app->theme.text);
+        shell_platform_text(16, 60, app->status, app->theme.accent);
         if (!app->rename_pending) {
             lib = &app->filtered;
             if (lib->count == 0)
-                shell_platform_text(20, 110, "Нет совпадений", app->theme.text);
+                shell_platform_text(16, 100, "Нет совпадений", COL_MUTED());
             else
                 draw_list(app, lib);
         }
-        draw_hints(app, app->rename_pending
-                            ? "Влево/вправо  X символ  Square стереть  Start применить  O отмена"
-                            : "Влево/вправо  X ввод  Square стереть  O готово");
+        draw_hints(app, "");
         shell_platform_swap();
         return;
     }
 
     if (app->tab == SHELL_TAB_HOME_PREVIEW) {
         draw_home_preview(app);
-        draw_hints(app, "O/Start — назад в настройки");
+        draw_hints(app, "");
         shell_platform_swap();
         return;
     }
 
     if (app->tab == SHELL_TAB_SETTINGS) {
         const ShellThemePreset *p = shell_theme_presets();
-        shell_platform_text(20, 40, "Настройки", app->theme.text);
+        ShellRgb muted = COL_MUTED();
+        shell_platform_text(16, 36, "Оформление", app->theme.text);
+
+        /* Circular accent swatches */
         for (i = 0; i < SHELL_THEME_PRESET_COUNT; ++i) {
             int focused = (app->settings_focus == i);
-            int x = 20 + i * 68;
-            ShellRgb b = focused ? app->theme.text : card;
-            shell_platform_rect(x - 2, 70, 56, 28, b, 6);
-            shell_platform_rect(x, 72, 52, 24, p[i].accent, 5);
-            shell_platform_text(x, 104, p[i].name_ru, app->theme.text);
+            int cx = 24 + i * 36;
+            shell_platform_rect(cx, 56, 24, 24, p[i].accent, 12);
+            if (focused)
+                draw_border(cx - 2, 54, 28, 28, app->theme.text, 2);
         }
         {
             int focused = (app->settings_focus == SHELL_THEME_PRESET_COUNT);
-            int x = 20 + SHELL_THEME_PRESET_COUNT * 68;
-            ShellRgb b = focused ? app->theme.accent : card;
-            shell_platform_rect(x - 2, 70, 40, 28, b, 6);
-            shell_platform_text(x + 12, 78, "+", app->theme.text);
-            shell_platform_text(x, 104, "палитра", app->theme.text);
+            int cx = 24 + SHELL_THEME_PRESET_COUNT * 36;
+            shell_platform_rect(cx, 56, 24, 24, COL_CARD(), 12);
+            draw_border(cx, 56, 24, 24, focused ? app->theme.accent : COL_LINE(), focused ? 2 : 1);
+            shell_platform_text(cx + 8, 62, "+", app->theme.text);
         }
+
+        /* Wallpaper thumbs */
+        shell_platform_text(16, 92, "Обои", muted);
+        for (i = 0; i < 3; ++i) {
+            int focused = (app->settings_focus == SHELL_THEME_PRESET_COUNT + 2 &&
+                           app->theme.wallpaper_id == i);
+            int wx = 16 + i * 52;
+            ShellRgb tint = (i == 0)   ? (ShellRgb){10, 15, 20}
+                            : (i == 1) ? (ShellRgb){24, 28, 36}
+                                       : (ShellRgb){32, 28, 28};
+            draw_frame_fill(wx, 106, 44, 28, tint,
+                            focused || app->theme.wallpaper_id == i ? app->theme.accent : COL_LINE(),
+                            8, 1);
+        }
+
+        /* Layout segmented control */
         {
-            int focused = (app->settings_focus == SHELL_THEME_PRESET_COUNT + 1);
-            char vline[64];
-            ShellRgb c = focused ? app->theme.accent : app->theme.text;
-            snprintf(vline, sizeof(vline), "Вид библиотеки: %s", VIEW_RU[app->theme.library_view]);
-            shell_platform_text(20, 128, vline, c);
+            int focused_row = (app->settings_focus == SHELL_THEME_PRESET_COUNT + 1);
+            int vx = 16;
+            shell_platform_text(16, 144, "Вид библиотеки", muted);
+            for (i = 0; i < 3; ++i) {
+                int on = (app->theme.library_view == i);
+                int tw = shell_font_measure(VIEW_RU[i]) + 12;
+                draw_frame_fill(vx, 158, tw, 22, on ? app->theme.accent : COL_CARD(),
+                                (focused_row && on) ? app->theme.text : COL_LINE(), 8, 1);
+                shell_platform_text(vx + 6, 162, VIEW_RU[i], on ? app->theme.focus_text : app->theme.text);
+                vx += tw + 6;
+            }
         }
-        {
-            int focused = (app->settings_focus == SHELL_THEME_PRESET_COUNT + 2);
-            char wline[64];
-            ShellRgb c = focused ? app->theme.accent : app->theme.text;
-            snprintf(wline, sizeof(wline), "Обои: пресет %d", app->theme.wallpaper_id);
-            shell_platform_text(20, 146, wline, c);
-        }
+
         {
             int focused = (app->settings_focus == SHELL_THEME_PRESET_COUNT + 3);
             ShellRgb c = focused ? app->theme.accent : app->theme.text;
-            shell_platform_text(20, 164, "Предпросмотр HOME-панели", c);
+            shell_platform_text(16, 190, "Предпросмотр HOME-панели", c);
         }
-        shell_platform_text(20, 190, "Акцент только для фокуса и ползунков", app->theme.text);
-        draw_hints(app, app->status[0] ? app->status : "O назад  X выбрать");
+
+        draw_mini_library_preview(app, 300, 100);
+        draw_hints(app, "");
         shell_platform_swap();
         return;
     }
@@ -1074,18 +1223,18 @@ void shell_app_render(ShellApp *app)
         ShellFileBrowser *fb = active_files(app);
         size_t start, idx;
         int row = 0;
-        char path_show[96], sz[24], line[300];
-        char fullname[280];
+        char path_show[96], sz[24], line[300], fullname[280];
+        ShellRgb muted = COL_MUTED();
 
-        shell_platform_text(20, 38, app->files_pane ? "Локация B" : "Локация A", app->theme.accent);
-        ellipsize(path_show, sizeof(path_show), fb->cwd, 360);
-        shell_platform_text(20, 54, path_show, app->theme.text);
+        shell_platform_text(16, 36, app->files_pane ? "Локация B" : "Локация A", app->theme.accent);
+        ellipsize(path_show, sizeof(path_show), fb->cwd, 280);
+        shell_platform_text(110, 36, path_show, app->theme.text);
+        shell_platform_text(340, 36, "Свободно: неизвестно", muted);
 
-        start = fb->focus > 4 ? fb->focus - 4 : 0;
-        for (idx = start; idx < fb->count && row < 6; ++idx, ++row) {
+        start = fb->focus > 5 ? fb->focus - 5 : 0;
+        for (idx = start; idx < fb->count && row < 7; ++idx, ++row) {
             int focused = (idx == fb->focus);
-            ShellRgb bgc = focused ? app->theme.accent : card;
-            ShellRgb tc = focused ? app->theme.focus_text : app->theme.text;
+            ShellRgb border = focused ? app->theme.accent : COL_LINE();
             if (fb->items[idx].is_dir)
                 snprintf(line, sizeof(line), "/%s", fb->items[idx].name);
             else {
@@ -1093,48 +1242,33 @@ void shell_app_render(ShellApp *app)
                 snprintf(line, sizeof(line), " %s  %s", fb->items[idx].name, sz);
             }
             ellipsize(line, sizeof(line), line, 420);
-            shell_platform_rect(16, 72 + row * 24, 448, 22, bgc, 4);
-            shell_platform_text(22, 76 + row * 24, line, tc);
+            draw_frame_fill(12, 56 + row * 28, 456, 26, COL_CARD(), border, 8, focused ? 2 : 1);
+            shell_platform_text(22, 62 + row * 28, line, app->theme.text);
         }
-
         if (fb->count && fb->focus < fb->count) {
             ellipsize(fullname, sizeof(fullname), fb->items[fb->focus].name, 400);
-            shell_platform_text(20, 218, fullname, app->theme.text);
+            shell_platform_text(16, 232, fullname, muted);
         } else if (fb->count == 0) {
-            shell_platform_text(20, 120, "Папка пуста или недоступна", app->theme.text);
+            shell_platform_text(16, 120, "Папка пуста или недоступна", muted);
         }
-        {
-            ShellRgb muted = {150, 154, 160};
-            uint64_t free_b = 0;
-            char free_line[64];
-#ifndef HOST_TEST
-            if (shell_files_free_space(fb->cwd, &free_b) == 0) {
-                char sz[24];
-                shell_files_format_size(free_b, sz, sizeof(sz));
-                snprintf(free_line, sizeof(free_line), "Свободно: %s", sz);
-            } else
-#endif
-            {
-                snprintf(free_line, sizeof(free_line), "Свободно: неизвестно");
-            }
-            shell_platform_text(280, 38, free_line, muted);
-            (void)free_b;
-        }
-        draw_hints(app, "X открыть  O вверх  Triangle меню  L/R локация");
+        draw_hints(app, "");
         shell_platform_swap();
         return;
     }
 
     lib = active_lib(app);
-    if (app->show_favorites_only == 1)
-        shell_platform_text(300, 38, "Избранное", app->theme.accent);
-    else if (app->show_favorites_only == 2)
-        shell_platform_text(300, 38, "Недавние", app->theme.accent);
-
     if (lib->count == 0) {
-        draw_empty_library(app);
+        /* Filtered empty (favorites/recent) still show filter label, not "library empty" */
+        if (app->show_favorites_only && app->games.count > 0 &&
+            (app->tab == SHELL_TAB_GAMES || app->tab == SHELL_TAB_APPS || app->tab == SHELL_TAB_MUSIC)) {
+            ShellRgb muted = COL_MUTED();
+            const char *msg = app->show_favorites_only == 2 ? "Нет недавних" : "Нет избранного";
+            shell_platform_text(24, 120, msg, app->theme.text);
+            shell_platform_text(24, 140, "SELECT — сбросить фильтр", muted);
+        } else {
+            draw_empty_library(app);
+        }
     } else if (app->tab == SHELL_TAB_MUSIC || app->theme.library_view == 2) {
-        /* Music is always a readable track list */
         draw_list(app, lib);
     } else if (app->theme.library_view == 1) {
         draw_grid(app, lib);
@@ -1142,17 +1276,6 @@ void shell_app_render(ShellApp *app)
         draw_cover_row(app, lib);
     }
 
-    {
-        const char *hint = app->status;
-        if (!hint[0]) {
-            if (app->tab == SHELL_TAB_MUSIC)
-                hint = "L/R  крест  X выбрать  Square избранное  (плеер — след. этап)";
-            else if (app->tab == SHELL_TAB_APPS)
-                hint = "L/R вкладки  крест фокус  X запуск  Square избранное";
-            else
-                hint = "L/R  крест  X запуск  Select фильтр  Triangle поиск  Start *";
-        }
-        draw_hints(app, hint);
-    }
+    draw_hints(app, "");
     shell_platform_swap();
 }

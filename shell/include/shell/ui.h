@@ -77,6 +77,7 @@ void shell_app_render(ShellApp *app);
 
 void shell_platform_clear(uint8_t r, uint8_t g, uint8_t b);
 void shell_platform_rect(int x, int y, int w, int h, ShellRgb c, int radius);
+void shell_platform_px(int x, int y, ShellRgb c, uint8_t alpha);
 void shell_platform_text(int x, int y, const char *utf8, ShellRgb c);
 void shell_platform_swap(void);
 int shell_platform_launch(const char *path, ShellEntryKind kind);

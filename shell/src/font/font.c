@@ -196,36 +196,6 @@ static const unsigned char *find_extra(unsigned cp)
     return NULL;
 }
 
-static int utf8_next(const unsigned char **pp, unsigned *cp)
-{
-    const unsigned char *p = *pp;
-    if (!*p)
-        return 0;
-    if (p[0] < 0x80) {
-        *cp = p[0];
-        *pp = p + 1;
-        return 1;
-    }
-    if ((p[0] & 0xE0) == 0xC0 && p[1]) {
-        *cp = ((unsigned)(p[0] & 0x1F) << 6) | (p[1] & 0x3F);
-        *pp = p + 2;
-        return 1;
-    }
-    if ((p[0] & 0xF0) == 0xE0 && p[1] && p[2]) {
-        *cp = ((unsigned)(p[0] & 0x0F) << 12) | ((unsigned)(p[1] & 0x3F) << 6) | (p[2] & 0x3F);
-        *pp = p + 3;
-        return 1;
-    }
-    if ((p[0] & 0xF8) == 0xF0 && p[1] && p[2] && p[3]) {
-        *cp = '?';
-        *pp = p + 4;
-        return 1;
-    }
-    *cp = '?';
-    *pp = p + 1;
-    return 1;
-}
-
 /* Classic ASCII dump above is LSB=left; our plotter and Cyrillic use MSB=left. */
 static unsigned char bitrev8(unsigned char b)
 {
@@ -253,44 +223,4 @@ const unsigned char *shell_font_glyph(unsigned cp)
     for (i = 0; i < 8; ++i)
         ascii_msb[i] = bitrev8(g[i]);
     return ascii_msb;
-}
-
-int shell_font_advance(void)
-{
-    return FONT_ADV;
-}
-
-int shell_font_measure(const char *utf8)
-{
-    const unsigned char *p = (const unsigned char *)utf8;
-    unsigned cp;
-    int w = 0;
-    if (!utf8)
-        return 0;
-    while (utf8_next(&p, &cp))
-        w += FONT_ADV;
-    return w;
-}
-
-int shell_font_utf8_draw(const char *utf8, int x, int y, ShellRgb c,
-                         void (*plot)(int px, int py, ShellRgb col, void *ud), void *ud)
-{
-    const unsigned char *p = (const unsigned char *)utf8;
-    unsigned cp;
-    int cx = x;
-    if (!utf8 || !plot)
-        return 0;
-    while (utf8_next(&p, &cp)) {
-        const unsigned char *glyph = shell_font_glyph(cp);
-        int gx, gy;
-        for (gy = 0; gy < FONT_H; ++gy) {
-            unsigned char row = glyph[gy];
-            for (gx = 0; gx < FONT_W; ++gx) {
-                if (row & (0x80u >> gx))
-                    plot(cx + gx, y + gy, c, ud);
-            }
-        }
-        cx += FONT_ADV;
-    }
-    return cx - x;
 }

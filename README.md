@@ -1,8 +1,40 @@
-# OwnShell — native PSP-3008 shell (ARK) + future HOME overlay
+# Velora / OwnShell — native PSP-3008 shell (ARK)
 
-Нативный шелл 480×272 для PSP-3008 под **ARK-5**. M1 = bootable `EBOOT.PBP` с библиотекой, темой (пресеты + круговая палитра стиком) и безопасным каркасом **Файлы**. HOME PRX / savestate / музыка поверх игры — отдельные spikes с флагами.
+Нативная оболочка **480×272** для PSP-3008 под **ARK/PRO**. Самостоятельный `EBOOT.PBP` (не React, не браузерный мок).
 
-## Docs
+## Что есть в оболочке
+
+- Вкладки **Игры / Музыка / Приложения / Файлы**, настройки через **Start** (иконка шестерёнки)
+- Библиотека: обложки / сетка / список (сохраняется), избранное, недавние, поиск
+- Тема: пресеты + круговая палитра стиком, акцент не красит весь текст
+- **Файлы**: две локации L/R, копирование / перемещение / удаление / переименование с подтверждением; запись только на ms0/ef0
+- **Музыка**: список локальных файлов; воспроизведение и внутриигровой звук — **отдельные этапы**
+- **HOME**: только помеченный **предпросмотр** (не внутриигровой PRX)
+- ISO-запуск честно требует CFW; savestate не подменяется обычными сейвами
+
+## Сборка
+
+```bash
+export PATH="$HOME/pspdev/bin:$PATH"   # pspdev v20261101
+make -C host_tests test
+make -C shell
+```
+
+Скопировать `shell/EBOOT.PBP` → `ms0:/PSP/GAME/OWNSHELL/EBOOT.PBP`.
+
+Готовый артефакт: `dist/OwnShell-M1-EBOOT.PBP`.
+
+## Проверка
+
+| Слой | Как |
+|------|-----|
+| **host** | `make -C host_tests test` |
+| **emulator** | PPSSPP: UI, ввод, сохранение темы |
+| **real PSP** | CFW, батарея/RTC, LoadExec ISO |
+
+Autotest (опционально): файл `ms0:/PSP/SYSTEM/ownshell/autotest.cfg` циклически листает вкладки; Start выключает.
+
+## Документация
 
 - [docs/architecture.md](docs/architecture.md)
 - [docs/compatibility-matrix.md](docs/compatibility-matrix.md)
@@ -10,29 +42,8 @@
 - [docs/hardware-checklist.md](docs/hardware-checklist.md)
 - [THIRD_PARTY.md](THIRD_PARTY.md)
 
-## Host tests (no PSP required)
+## Безопасность
 
-```bash
-make -C host_tests test
-```
-
-Layer tag: **host**.
-
-## Build EBOOT (pspdev)
-
-1. Install [pspdev](https://github.com/pspdev/pspdev/releases) — pin **`v20261101`** (see pinned-versions).
-2. `export PSPDEV=/path/to/pspdev` and put `$PSPDEV/bin` on `PATH`.
-3. `make -C shell`
-4. Copy `shell/EBOOT.PBP` to `ms0:/PSP/GAME/OWNSHELL/EBOOT.PBP`.
-
-Layer tag after copy+launch on device: **real PSP**. PPSSPP can smoke UI only: **emulator**.
-
-## Safety
-
-- No flash0/flash1 writes in build/CI.
-- Confirm CFW string on device before migrating from presumed PRO-B to ARK-5.
-- Do not weaken home Wi‑Fi; prefer guest 2.4 GHz WPA2-AES.
-
-## Status
-
-See agent report in chat after first scaffold. M1 is intentionally small and expandable.
+- Нет записи во flash0/flash1 из оболочки
+- Ничего не прошивается автоматически
+- HOME PRX / Telegram / сеть — только после стабильной оболочки, отдельными этапами

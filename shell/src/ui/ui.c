@@ -729,7 +729,20 @@ static void draw_chrome(ShellApp *app)
     ShellRgb muted = {160, 164, 170};
     char clock[24], batt[24], sys[64];
 
-    shell_platform_clear(app->theme.bg.r, app->theme.bg.g, app->theme.bg.b);
+    /* Wallpaper presets are flat tint shifts only — no fake photo loading. */
+    {
+        ShellRgb bg = app->theme.bg;
+        if (app->theme.wallpaper_id == 1) {
+            bg.r = 24;
+            bg.g = 28;
+            bg.b = 36;
+        } else if (app->theme.wallpaper_id == 2) {
+            bg.r = 32;
+            bg.g = 28;
+            bg.b = 28;
+        }
+        shell_platform_clear(bg.r, bg.g, bg.b);
+    }
     shell_platform_rect(4, 4, 472, 264, panel, 10);
 
     x = 12;
@@ -930,9 +943,10 @@ static void draw_home_preview(ShellApp *app)
     shell_platform_rect(354, 100, 10, 50, muted, 2);
     shell_platform_rect(354, 110, 10, 40, app->theme.accent, 2);
 
-    shell_platform_rect(18, 174, 442, 36, card, 6);
-    shell_platform_text(26, 186, "Сохранить*  Загрузить*  Скрин  Выход", app->theme.text);
-    shell_platform_text(26, 220, "* savestate: не реализовано (не подмена сохранений)", muted);
+    shell_platform_rect(18, 174, 442, 28, card, 6);
+    shell_platform_text(26, 182, "Сохранить*  Загрузить*  Скрин  Выход", app->theme.text);
+    shell_platform_text(18, 208, "* savestate не реализован (не подмена сейвов)", muted);
+    shell_platform_text(18, 222, "Гик-меню (CPU/кнопки): только в будущем PRX", muted);
 }
 
 void shell_app_render(ShellApp *app)
@@ -1132,11 +1146,11 @@ void shell_app_render(ShellApp *app)
         const char *hint = app->status;
         if (!hint[0]) {
             if (app->tab == SHELL_TAB_MUSIC)
-                hint = "L/R вкладки  крест фокус  X выбрать (плеер — след. этап)";
+                hint = "L/R  крест  X выбрать  Square избранное  (плеер — след. этап)";
             else if (app->tab == SHELL_TAB_APPS)
                 hint = "L/R вкладки  крест фокус  X запуск  Square избранное";
             else
-                hint = "L/R вкладки  крест фокус  X запуск  Select фильтр  Start настройки";
+                hint = "L/R  крест  X запуск  Select фильтр  Triangle поиск  Start *";
         }
         draw_hints(app, hint);
     }
